@@ -138,73 +138,112 @@ export class DartDetectionService {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
-    // Convert to grayscale and find edges
-    const edges: number[] = [];
+    // Look for circular regions with high contrast (dartboard has black/white/red/green)
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // Create a simplified color map looking for dartboard colors
+    const colorScore: number[] = new Array(width * height).fill(0);
+    
     for (let i = 0; i < data.length; i += 4) {
-      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      edges.push(gray);
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      
+      // Look for dartboard colors: dark (black), light (white/cream), red, green
+      const isDark = r < 80 && g < 80 && b < 80;
+      const isLight = r > 200 && g > 200 && b > 200;
+      const isRed = r > 150 && g < 100 && b < 100;
+      const isGreen = r < 100 && g > 120 && b < 100;
+      
+      if (isDark || isLight || isRed || isGreen) {
+        colorScore[i / 4] = 1;
+      }
     }
 
-    // Find the brightest/most prominent circular region
-    // Look for the center of the image as a starting point
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    // Find regions with high density of dartboard colors
+    let bestCenterX = width / 2;
+    let bestCenterY = height / 2;
+    let bestScore = 0;
     
-    // Try different radii to find the best fit
+    // Sample potential center points
+    const sampleStep = 20;
+    for (let cy = height * 0.2; cy < height * 0.8; cy += sampleStep) {
+      for (let cx = width * 0.2; cx < width * 0.8; cx += sampleStep) {
+        let score = 0;
+        const testRadius = Math.min(width, height) * 0.25;
+        
+        // Count dartboard-colored pixels in a circle around this point
+        for (let angle = 0; angle < 360; angle += 10) {
+          const rad = (angle * Math.PI) / 180;
+          const x = Math.round(cx + testRadius * Math.cos(rad));
+          const y = Math.round(cy + testRadius * Math.sin(rad));
+          
+          if (x >= 0 && x < width && y >= 0 && y < height) {
+            const idx = y * width + x;
+            score += colorScore[idx];
+          }
+        }
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestCenterX = cx;
+          bestCenterY = cy;
+        }
+      }
+    }
+
+    // Refine radius by testing different sizes
     let bestRadius = 0;
-    let maxScore = 0;
+    let maxRadiusScore = 0;
+    const minRadius = Math.min(width, height) * 0.15;
+    const maxRadius = Math.min(width, height) * 0.45;
 
-    const minRadius = Math.min(canvas.width, canvas.height) * 0.15;
-    const maxRadius = Math.min(canvas.width, canvas.height) * 0.4;
-
-    for (let r = minRadius; r <= maxRadius; r += 5) {
+    for (let r = minRadius; r <= maxRadius; r += 3) {
       let score = 0;
-      const samples = 36; // Sample 36 points around the circle
+      const samples = 36;
 
       for (let angle = 0; angle < 360; angle += 360 / samples) {
         const rad = (angle * Math.PI) / 180;
-        const x = Math.round(centerX + r * Math.cos(rad));
-        const y = Math.round(centerY + r * Math.sin(rad));
+        const x = Math.round(bestCenterX + r * Math.cos(rad));
+        const y = Math.round(bestCenterY + r * Math.sin(rad));
 
-        if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
-          const idx = y * canvas.width + x;
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+          const idx = y * width + x;
+          score += colorScore[idx];
           
-          // Check for edge-like features (color transitions)
-          const neighbors = [
-            idx - 1,
-            idx + 1,
-            idx - canvas.width,
-            idx + canvas.width
-          ].filter(i => i >= 0 && i < edges.length);
-
-          const gradientSum = neighbors.reduce((sum, nidx) => {
-            return sum + Math.abs(edges[idx] - edges[nidx]);
-          }, 0);
-
-          score += gradientSum;
+          // Also check inner and outer rings for better detection
+          const innerR = r * 0.8;
+          const xi = Math.round(bestCenterX + innerR * Math.cos(rad));
+          const yi = Math.round(bestCenterY + innerR * Math.sin(rad));
+          if (xi >= 0 && xi < width && yi >= 0 && yi < height) {
+            score += colorScore[yi * width + xi];
+          }
         }
       }
 
-      if (score > maxScore) {
-        maxScore = score;
+      if (score > maxRadiusScore) {
+        maxRadiusScore = score;
         bestRadius = r;
       }
     }
 
-    // If we found a reasonable circle
-    if (bestRadius > minRadius && maxScore > 1000) {
+    // Only return if we found a reasonable detection
+    if (bestScore > 5 && bestRadius > minRadius) {
+      console.log(`Auto-detected dartboard: center(${Math.round(bestCenterX)}, ${Math.round(bestCenterY)}), radius: ${Math.round(bestRadius)}, score: ${bestScore}`);
       return {
-        centerX,
-        centerY,
-        radius: bestRadius
+        centerX: Math.round(bestCenterX),
+        centerY: Math.round(bestCenterY),
+        radius: Math.round(bestRadius)
       };
     }
 
-    // Fallback: use default proportions
+    // Fallback: use center of frame with estimated radius
+    console.log('Auto-detection fallback - using center of frame');
     return {
-      centerX: canvas.width / 2,
-      centerY: canvas.height / 2,
-      radius: Math.min(canvas.width, canvas.height) / 3
+      centerX: Math.round(width / 2),
+      centerY: Math.round(height / 2),
+      radius: Math.round(Math.min(width, height) / 3)
     };
   }
 

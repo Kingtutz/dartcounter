@@ -1,19 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface DartboardCalibrationProps {
   onCalibrate: (centerX: number, centerY: number, radius: number) => void;
   onAutoCalibrate: () => void;
   isCalibrated: boolean;
+  clickedCenter?: { x: number; y: number } | null;
 }
 
 export const DartboardCalibration: React.FC<DartboardCalibrationProps> = ({ 
   onAutoCalibrate,
   onCalibrate,
-  isCalibrated 
+  isCalibrated,
+  clickedCenter
 }) => {
   const [centerX, setCenterX] = useState(640);
   const [centerY, setCenterY] = useState(360);
   const [radius, setRadius] = useState(200);
+
+  useEffect(() => {
+    if (clickedCenter) {
+      setCenterX(clickedCenter.x);
+      setCenterY(clickedCenter.y);
+    }
+  }, [clickedCenter]);
 
   const handleCalibrate = () => {
     onCalibrate(centerX, centerY, radius);

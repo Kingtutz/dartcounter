@@ -22,6 +22,7 @@ function App() {
   const [isCalibrated, setIsCalibrated] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [autoDetectEnabled, setAutoDetectEnabled] = useState(false);
+  const [clickedCenter, setClickedCenter] = useState<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const registerThrow = useCallback((score: number, multiplier: number) => {
@@ -153,6 +154,11 @@ function App() {
     }));
   }, []);
 
+  const handleCameraClick = (x: number, y: number) => {
+    setClickedCenter({ x, y });
+    console.log(`Clicked dartboard center at: (${x}, ${y})`);
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -187,12 +193,14 @@ function App() {
           <CameraFeed 
             onFrame={handleFrame} 
             isDetecting={isDetecting}
+            onCameraClick={handleCameraClick}
           />
           
           <DartboardCalibration 
             onCalibrate={handleCalibrate}
             onAutoCalibrate={handleAutoCalibrate}
             isCalibrated={isCalibrated}
+            clickedCenter={clickedCenter}
           />
         </div>
 

@@ -3,18 +3,30 @@ import { useEffect, useRef, useState } from 'react';
 interface CameraFeedProps {
   onFrame?: (canvas: HTMLCanvasElement) => void;
   isDetecting: boolean;
+  onCameraClick?: (x: number, y: number) => void;
 }
 
-export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting }) => {
+export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting: _isDetecting, onCameraClick }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
   const [zoom, setZoom] = useState(1);
   const animationFrameRef = useRef<number | undefined>(undefined);
 
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onCameraClick || !containerRef.current || !videoRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * videoRef.current.videoWidth;
+    const y = ((e.clientY - rect.top) / rect.height) * videoRef.current.videoHeight;
+    
+    onCameraClick(Math.round(x / zoom), Math.round(y / zoom));
+  };
+
   useEffect(() => {
-    const startCamera = async () => {
+    const initCamera = async () => {
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -23,19 +35,16 @@ export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting }) 
             facingMode: 'environment'
           }
         });
-        
         setStream(mediaStream);
-        
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
         }
       } catch (err) {
-        setError('Failed to access camera. Please grant camera permissions.');
-        console.error('Camera error:', err);
+        setError(`Camera error: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     };
 
-    startCamera();
+    initCamera();
 
     return () => {
       if (stream) {
@@ -48,11 +57,12 @@ export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting }) 
   }, []);
 
   useEffect(() => {
-    if (!videoRef.current || !canvasRef.current || !isDetecting) return;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     const processFrame = () => {
       if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
@@ -69,16 +79,10 @@ export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting }) 
     };
 
     processFrame();
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [isDetecting, onFrame]);
+  }, [stream, onFrame]);
 
   return (
-    <div className="camera-container">
+    <div className="camera-container" ref={containerRef} onClick={handleClick}>
       {error ? (
         <div className="error-message">{error}</div>
       ) : (
@@ -98,7 +102,10 @@ export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting }) 
           </div>
           <div className="camera-controls">
             <button 
-              onClick={() => setZoom(Math.max(1, zoom - 0.1))}
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoom(Math.max(1, zoom - 0.1));
+              }}
               className="zoom-btn"
               disabled={zoom <= 1}
             >
@@ -112,12 +119,16 @@ export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isDetecting }) 
                 step="0.1"
                 value={zoom}
                 onChange={(e) => setZoom(Number(e.target.value))}
+                onClick={(e) => e.stopPropagation()}
                 className="zoom-slider"
               />
               <span className="zoom-level">{Math.round(zoom * 100)}%</span>
             </div>
             <button 
-              onClick={() => setZoom(Math.min(3, zoom + 0.1))}
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoom(Math.min(3, zoom + 0.1));
+              }}
               className="zoom-btn"
               disabled={zoom >= 3}
             >
