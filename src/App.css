@@ -755,6 +755,150 @@
   margin-top: 1rem;
 }
 
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  background: linear-gradient(145deg, #1e1e1e, #2a2a2a);
+  border: 2px solid #00ff88;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 255, 136, 0.3);
+}
+
+.modal-content h2 {
+  color: #00ff88;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+  text-align: center;
+}
+
+.modal-content h3 {
+  color: #00ddff;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.player-count-selector {
+  margin-bottom: 2rem;
+}
+
+.player-count-selector label {
+  display: block;
+  color: #00ddff;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.count-buttons {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+}
+
+.count-buttons button {
+  padding: 0.75rem;
+  background: rgba(0, 221, 255, 0.1);
+  border: 2px solid #00ddff;
+  border-radius: 8px;
+  color: #00ddff;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.count-buttons button:hover {
+  background: rgba(0, 221, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.count-buttons button.active {
+  background: #00ddff;
+  color: #0a0a0a;
+  box-shadow: 0 0 20px rgba(0, 221, 255, 0.5);
+}
+
+.player-names {
+  margin-bottom: 2rem;
+}
+
+.player-name-input {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.player-name-input label {
+  color: #00ff88;
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.player-name-input input {
+  flex: 1;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid #00ff88;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.player-name-input input:focus {
+  outline: none;
+  border-color: #00ddff;
+  box-shadow: 0 0 10px rgba(0, 221, 255, 0.3);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.btn-secondary {
+  background: linear-gradient(145deg, #00ddff, #00aacc);
+  color: #0a0a0a;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 221, 255, 0.3);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 221, 255, 0.5);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Responsive Design */
 @media (max-width: 1200px) {
   .main-content {

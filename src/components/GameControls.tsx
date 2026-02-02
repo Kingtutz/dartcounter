@@ -7,6 +7,7 @@ interface GameControlsProps {
   onEndGame: () => void;
   onRegisterThrow: (score: number, multiplier: number) => void;
   onGameModeChange: (mode: '301' | '501' | 'cricket' | 'practice') => void;
+  onPlayerSetup: () => void;
 }
 
 export const GameControls: React.FC<GameControlsProps> = ({
@@ -16,6 +17,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   onEndGame,
   onRegisterThrow,
   onGameModeChange,
+  onPlayerSetup,
 }) => {
   const [manualScore, setManualScore] = useState(20);
   const [manualMultiplier, setManualMultiplier] = useState(1);
@@ -74,9 +76,14 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
       <div className="game-actions">
         {!isActive ? (
-          <button onClick={onStartGame} className="btn-primary btn-large">
-            Start Game
-          </button>
+          <>
+            <button onClick={onPlayerSetup} className="btn-secondary btn-large">
+              👥 Setup Players
+            </button>
+            <button onClick={onStartGame} className="btn-primary btn-large">
+              Start Game
+            </button>
+          </>
         ) : (
           <button onClick={onEndGame} className="btn-danger btn-large">
             End Game

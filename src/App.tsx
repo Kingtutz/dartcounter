@@ -23,6 +23,8 @@ function App() {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [autoDetectEnabled, setAutoDetectEnabled] = useState(false);
   const [clickedCenter, setClickedCenter] = useState<{ x: number; y: number } | null>(null);
+  const [playerCount, setPlayerCount] = useState(2);
+  const [showPlayerSetup, setShowPlayerSetup] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const registerThrow = useCallback((score: number, multiplier: number) => {
@@ -119,6 +121,30 @@ function App() {
     }
   }, [isCalibrated, autoDetectEnabled, gameState.isActive]);
 
+  const updatePlayerName = useCallback((index: number, name: string) => {
+    setGameState(prev => {
+      const updatedPlayers = [...prev.players];
+      updatedPlayers[index] = { ...updatedPlayers[index], name };
+      return { ...prev, players: updatedPlayers };
+    });
+  }, []);
+
+  const updatePlayerCount = useCallback((count: number) => {
+    setPlayerCount(count);
+    setGameState(prev => {
+      const newPlayers = Array.from({ length: count }, (_, i) => {
+        const existingPlayer = prev.players[i];
+        return existingPlayer || {
+          id: `${i + 1}`,
+          name: `Player ${i + 1}`,
+          score: 0,
+          throws: []
+        };
+      });
+      return { ...prev, players: newPlayers };
+    });
+  }, []);
+
   const startGame = useCallback(() => {
     setGameState(prev => ({
       ...prev,
@@ -127,6 +153,7 @@ function App() {
       currentPlayerIndex: 0
     }));
     setIsDetecting(true);
+    setShowPlayerSetup(false);
     dartDetectionService.resetFrameComparison();
   }, []);
 
@@ -148,6 +175,14 @@ function App() {
   const handleCameraClick = (x: number, y: number) => {
     setClickedCenter({ x, y });
     console.log(`Clicked dartboard center at: (${x}, ${y})`);
+  };
+
+  const openPlayerSetup = () => {
+    setShowPlayerSetup(true);
+  };
+
+  const closePlayerSetup = () => {
+    setShowPlayerSetup(false);
   };
 
   return (
@@ -209,9 +244,54 @@ function App() {
             onEndGame={endGame}
             onRegisterThrow={registerThrow}
             onGameModeChange={changeGameMode}
+            onPlayerSetup={openPlayerSetup}
           />
         </div>
       </div>
+
+      {showPlayerSetup && (
+        <div className="modal-overlay" onClick={closePlayerSetup}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Player Setup</h2>
+            
+            <div className="player-count-selector">
+              <label>Number of Players:</label>
+              <div className="count-buttons">
+                {[1, 2, 3, 4, 5, 6].map(count => (
+                  <button
+                    key={count}
+                    onClick={() => updatePlayerCount(count)}
+                    className={playerCount === count ? 'active' : ''}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="player-names">
+              <h3>Player Names</h3>
+              {gameState.players.map((player, index) => (
+                <div key={player.id} className="player-name-input">
+                  <label>Player {index + 1}:</label>
+                  <input
+                    type="text"
+                    value={player.name}
+                    onChange={(e) => updatePlayerName(index, e.target.value)}
+                    placeholder={`Player ${index + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button onClick={closePlayerSetup} className="btn-primary">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
