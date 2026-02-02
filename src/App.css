@@ -29,6 +29,67 @@
   opacity: 0.8;
 }
 
+.header-controls {
+  margin-top: 1rem;
+}
+
+.auto-detect-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.auto-detect-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.auto-detect-toggle input[type="checkbox"] {
+  width: 50px;
+  height: 26px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 13px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s;
+  outline: none;
+}
+
+.auto-detect-toggle input[type="checkbox"]:checked {
+  background: #4CAF50;
+}
+
+.auto-detect-toggle input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.auto-detect-toggle input[type="checkbox"]:checked::before {
+  left: 26px;
+}
+
+.toggle-label {
+  font-size: 1.1rem;
+  font-weight: bold;
+  user-select: none;
+}
+
 .current-turn {
   margin-top: 1rem;
   padding: 0.75rem 1.5rem;

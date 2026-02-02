@@ -21,13 +21,55 @@ function App() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isCalibrated, setIsCalibrated] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const registerThrow = useCallback((score: number, multiplier: number) => {
+    setGameState(prev => {
+      if (!prev.isActive) return prev;
+
+      const currentPlayer = prev.players[prev.currentPlayerIndex];
+      const newThrow: DartThrow = {
+        id: `${Date.now()}`,
+        score,
+        multiplier,
+        timestamp: Date.now()
+      };
+
+      const updatedPlayers = [...prev.players];
+      updatedPlayers[prev.currentPlayerIndex] = {
+        ...currentPlayer,
+        throws: [...currentPlayer.throws, newThrow],
+        score: currentPlayer.score + (score * multiplier)
+      };
+
+      // Move to next player after 3 throws
+      const throwsCount = updatedPlayers[prev.currentPlayerIndex].throws.length;
+      const nextPlayerIndex = throwsCount % 3 === 0 
+        ? (prev.currentPlayerIndex + 1) % prev.players.length
+        : prev.currentPlayerIndex;
+
+      return {
+        ...prev,
+        players: updatedPlayers,
+        currentPlayerIndex: nextPlayerIndex
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const initModel = async () => {
       try {
         await dartDetectionService.initialize();
         setModelLoaded(true);
+        
+        // Set up auto-detection callback
+        dartDetectionService.setDetectionCallback((score, multiplier) => {
+          if (autoDetectEnabled && gameState.isActive) {
+            registerThrow(score, multiplier);
+          }
+        });
+        
         console.log('Detection model initialized');
       } catch (error) {
         console.error('Failed to initialize model:', error);
@@ -35,7 +77,7 @@ function App() {
     };
 
     initModel();
-  }, []);
+  }, [autoDetectEnabled, gameState.isActive, registerThrow]);
 
   const handleCalibrate = useCallback((centerX: number, centerY: number, radius: number) => {
     if (canvasRef.current) {
@@ -64,6 +106,11 @@ function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Auto-detect dart impacts if enabled
+    if (autoDetectEnabled && isCalibrated && gameState.isActive) {
+      dartDetectionService.detectDartImpact(canvas);
+    }
+
     // Detect darts in the frame
     dartDetectionService.detectDarts(canvas).then(detections => {
       if (detections.length > 0) {
@@ -73,44 +120,12 @@ function App() {
 
     // Draw dartboard overlay if calibrated
     if (isCalibrated) {
-      // You would get these values from calibration
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       const radius = Math.min(canvas.width, canvas.height) / 4;
       dartDetectionService.drawDartboard(ctx, centerX, centerY, radius);
     }
-  }, [isCalibrated]);
-
-  const registerThrow = useCallback((score: number, multiplier: number) => {
-    if (!gameState.isActive) return;
-
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const newThrow: DartThrow = {
-      id: `${Date.now()}`,
-      score,
-      multiplier,
-      timestamp: Date.now()
-    };
-
-    const updatedPlayers = [...gameState.players];
-    updatedPlayers[gameState.currentPlayerIndex] = {
-      ...currentPlayer,
-      throws: [...currentPlayer.throws, newThrow],
-      score: currentPlayer.score + (score * multiplier)
-    };
-
-    // Move to next player after 3 throws
-    const throwsCount = updatedPlayers[gameState.currentPlayerIndex].throws.length;
-    const nextPlayerIndex = throwsCount % 3 === 0 
-      ? (gameState.currentPlayerIndex + 1) % gameState.players.length
-      : gameState.currentPlayerIndex;
-
-    setGameState(prev => ({
-      ...prev,
-      players: updatedPlayers,
-      currentPlayerIndex: nextPlayerIndex
-    }));
-  }, [gameState]);
+  }, [isCalibrated, autoDetectEnabled, gameState.isActive]);
 
   const startGame = useCallback(() => {
     setGameState(prev => ({
@@ -120,6 +135,7 @@ function App() {
       currentPlayerIndex: 0
     }));
     setIsDetecting(true);
+    dartDetectionService.resetFrameComparison();
   }, []);
 
   const endGame = useCallback(() => {
@@ -144,6 +160,18 @@ function App() {
         <p className="subtitle">
           {modelLoaded ? '✓ AI Model Loaded' : '⏳ Loading AI Model...'}
         </p>
+        <div className="header-controls">
+          <label className="auto-detect-toggle">
+            <input
+              type="checkbox"
+              checked={autoDetectEnabled}
+              onChange={(e) => setAutoDetectEnabled(e.target.checked)}
+            />
+            <span className="toggle-label">
+              🤖 Auto-Detect Darts {autoDetectEnabled ? '(ON)' : '(OFF)'}
+            </span>
+          </label>
+        </div>
         {gameState.isActive && (
           <div className="current-turn">
             <strong>Current Player:</strong> {gameState.players[gameState.currentPlayerIndex].name}

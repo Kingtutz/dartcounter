@@ -7,6 +7,8 @@ export class DartDetectionService {
   private isInitialized = false;
   private dartboardCenter: { x: number; y: number } | null = null;
   private dartboardRadius: number = 0;
+  private previousFrame: ImageData | null = null;
+  private detectionCallback: ((score: number, multiplier: number) => void) | null = null;
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -19,6 +21,112 @@ export class DartDetectionService {
     } catch (error) {
       console.error('Failed to load detection model:', error);
       throw error;
+    }
+  }
+
+  // Set callback for automatic dart detection
+  setDetectionCallback(callback: (score: number, multiplier: number) => void): void {
+    this.detectionCallback = callback;
+  }
+
+  // Detect dart impact using frame difference
+  detectDartImpact(canvas: HTMLCanvasElement): void {
+    if (!this.dartboardCenter || !this.dartboardRadius) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // If we have a previous frame, compare them
+    if (this.previousFrame) {
+      const changes = this.detectFrameChanges(this.previousFrame, currentFrame);
+      
+      // Filter changes to only those within the dartboard area
+      const dartboardChanges = changes.filter(point => {
+        const dx = point.x - this.dartboardCenter!.x;
+        const dy = point.y - this.dartboardCenter!.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance <= this.dartboardRadius!;
+      });
+
+      // If we detected a significant change in the dartboard area
+      if (dartboardChanges.length > 50 && dartboardChanges.length < 1000) {
+        // Find the center of the changes (approximate dart position)
+        const avgX = dartboardChanges.reduce((sum, p) => sum + p.x, 0) / dartboardChanges.length;
+        const avgY = dartboardChanges.reduce((sum, p) => sum + p.y, 0) / dartboardChanges.length;
+
+        // Calculate score based on position
+        const result = this.calculateScore(avgX, avgY);
+        
+        // Call the callback if set
+        if (this.detectionCallback && result.score > 0) {
+          console.log(`Auto-detected dart at (${avgX.toFixed(0)}, ${avgY.toFixed(0)}): ${result.multiplier > 1 ? (result.multiplier === 2 ? 'D' : 'T') : ''}${result.score}`);
+          this.detectionCallback(result.score, result.multiplier);
+        }
+      }
+    }
+
+    // Store current frame for next comparison
+    this.previousFrame = currentFrame;
+  }
+
+  // Detect changes between two frames
+  private detectFrameChanges(prevFrame: ImageData, currentFrame: ImageData): Array<{x: number, y: number}> {
+    const changes: Array<{x: number, y: number}> = [];
+    const threshold = 30; // Sensitivity threshold
+    const width = prevFrame.width;
+
+    for (let i = 0; i < prevFrame.data.length; i += 4) {
+      const rDiff = Math.abs(prevFrame.data[i] - currentFrame.data[i]);
+      const gDiff = Math.abs(prevFrame.data[i + 1] - currentFrame.data[i + 1]);
+      const bDiff = Math.abs(prevFrame.data[i + 2] - currentFrame.data[i + 2]);
+      
+      const totalDiff = rDiff + gDiff + bDiff;
+      
+      if (totalDiff > threshold) {
+        const pixelIndex = i / 4;
+        const x = pixelIndex % width;
+        const y = Math.floor(pixelIndex / width);
+        changes.push({ x, y });
+      }
+    }
+
+    return changes;
+  }
+
+  // Reset frame comparison
+  resetFrameComparison(): void {
+    this.previousFrame = null;
+  }
+
+  async detectDarts(canvas: HTMLCanvasElement): Promise<Detection[]> {
+    if (!this.model || !this.isInitialized) {
+      console.warn('Model not initialized');
+      return [];
+    }
+
+    try {
+      const predictions = await this.model.detect(canvas);
+      
+      // Filter for objects that could be darts or the dartboard
+      const detections: Detection[] = predictions
+        .filter(pred => 
+          pred.class === 'sports ball' || 
+          pred.class === 'frisbee' ||
+          pred.class === 'knife' ||
+          pred.score > 0.3
+        )
+        .map(pred => ({
+          bbox: pred.bbox,
+          class: pred.class,
+          score: pred.score
+        }));
+
+      return detections;
+    } catch (error) {
+      console.error('Detection error:', error);
+      return [];
     }
   }
 
@@ -98,36 +206,6 @@ export class DartDetectionService {
       centerY: canvas.height / 2,
       radius: Math.min(canvas.width, canvas.height) / 3
     };
-  }
-
-  async detectDarts(canvas: HTMLCanvasElement): Promise<Detection[]> {
-    if (!this.model || !this.isInitialized) {
-      console.warn('Model not initialized');
-      return [];
-    }
-
-    try {
-      const predictions = await this.model.detect(canvas);
-      
-      // Filter for objects that could be darts or the dartboard
-      const detections: Detection[] = predictions
-        .filter(pred => 
-          pred.class === 'sports ball' || 
-          pred.class === 'frisbee' ||
-          pred.class === 'knife' ||
-          pred.score > 0.3
-        )
-        .map(pred => ({
-          bbox: pred.bbox,
-          class: pred.class,
-          score: pred.score
-        }));
-
-      return detections;
-    } catch (error) {
-      console.error('Detection error:', error);
-      return [];
-    }
   }
 
   // Calibrate dartboard position and size
