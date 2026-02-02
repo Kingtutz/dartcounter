@@ -130,6 +130,14 @@ function App() {
         <p className="subtitle">
           {modelLoaded ? '✓ AI Model Loaded' : '⏳ Loading AI Model...'}
         </p>
+        {gameState.isActive && (
+          <div className="current-turn">
+            <strong>Current Player:</strong> {gameState.players[gameState.currentPlayerIndex].name}
+            <span className="throw-count">
+              (Throw {(gameState.players[gameState.currentPlayerIndex].throws.length % 3) + 1} of 3)
+            </span>
+          </div>
+        )}
       </header>
 
       <div className="main-content">

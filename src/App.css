@@ -29,6 +29,22 @@
   opacity: 0.8;
 }
 
+.current-turn {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 215, 0, 0.2);
+  border: 2px solid #FFD700;
+  border-radius: 8px;
+  display: inline-block;
+  font-size: 1.1rem;
+}
+
+.throw-count {
+  margin-left: 0.5rem;
+  opacity: 0.8;
+  font-size: 0.95rem;
+}
+
 .main-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -376,8 +392,174 @@
 }
 
 .manual-entry h3 {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   font-size: 1.3rem;
+  text-align: center;
+}
+
+.manual-entry h4 {
+  margin: 1rem 0 0.5rem 0;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.entry-hint {
+  text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-bottom: 1rem;
+}
+
+.number-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.score-btn {
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.8), rgba(56, 142, 60, 0.8));
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.score-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  background: linear-gradient(135deg, rgba(76, 175, 80, 1), rgba(56, 142, 60, 1));
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.5);
+}
+
+.score-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.score-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.multiplier-section {
+  margin-bottom: 1rem;
+}
+
+.multiplier-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.multiplier-btn {
+  padding: 0.75rem;
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.multiplier-btn.double {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.8), rgba(21, 101, 192, 0.8));
+}
+
+.multiplier-btn.double:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 1), rgba(21, 101, 192, 1));
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.5);
+}
+
+.multiplier-btn.triple {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.8), rgba(230, 81, 0, 0.8));
+}
+
+.multiplier-btn.triple:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 1), rgba(230, 81, 0, 1));
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.5);
+}
+
+.multiplier-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.special-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.special-btn {
+  padding: 0.75rem;
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.special-btn.bull {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.8), rgba(123, 31, 162, 0.8));
+}
+
+.special-btn.bull:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 1), rgba(123, 31, 162, 1));
+  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.5);
+}
+
+.special-btn.bullseye {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.8), rgba(211, 47, 47, 0.8));
+}
+
+.special-btn.bullseye:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 1), rgba(211, 47, 47, 1));
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.5);
+}
+
+.special-btn.miss {
+  background: linear-gradient(135deg, rgba(96, 125, 139, 0.8), rgba(69, 90, 100, 0.8));
+}
+
+.special-btn.miss:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(96, 125, 139, 1), rgba(69, 90, 100, 1));
+  box-shadow: 0 4px 12px rgba(96, 125, 139, 0.5);
+}
+
+.special-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.special-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.advanced-entry {
+  margin-top: 1rem;
+}
+
+.advanced-entry details {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.advanced-entry summary {
+  cursor: pointer;
+  padding: 0.5rem;
+  font-weight: bold;
+  user-select: none;
+}
+
+.advanced-entry summary:hover {
+  opacity: 0.8;
 }
 
 .manual-controls {
@@ -385,32 +567,7 @@
   grid-template-columns: 1fr 1fr auto;
   gap: 1rem;
   align-items: end;
-  margin-bottom: 1rem;
-}
-
-.quick-scores {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-}
-
-.quick-scores button {
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.quick-scores button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.quick-scores button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  margin-top: 1rem;
 }
 
 /* Responsive Design */
