@@ -6,7 +6,9 @@ export class DartDetectionService {
   private model: cocoSsd.ObjectDetection | null = null;
   private isInitialized = false;
   private dartboardCenter: { x: number; y: number } | null = null;
-  private dartboardRadius: number = 0;
+  private dartboardRadiusX: number = 0;
+  private dartboardRadiusY: number = 0;
+  private dartboardRotation: number = 0;
   private previousFrame: ImageData | null = null;
   private detectionCallback: ((score: number, multiplier: number) => void) | null = null;
 
@@ -29,337 +31,376 @@ export class DartDetectionService {
     this.detectionCallback = callback;
   }
 
-  // Detect dart impact using frame difference
-  detectDartImpact(canvas: HTMLCanvasElement): void {
-    if (!this.dartboardCenter || !this.dartboardRadius) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-    // If we have a previous frame, compare them
-    if (this.previousFrame) {
-      const changes = this.detectFrameChanges(this.previousFrame, currentFrame);
-      
-      // Filter changes to only those within the dartboard area
-      const dartboardChanges = changes.filter(point => {
-        const dx = point.x - this.dartboardCenter!.x;
-        const dy = point.y - this.dartboardCenter!.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        return distance <= this.dartboardRadius!;
-      });
-
-      // If we detected a significant change in the dartboard area
-      if (dartboardChanges.length > 50 && dartboardChanges.length < 1000) {
-        // Find the center of the changes (approximate dart position)
-        const avgX = dartboardChanges.reduce((sum, p) => sum + p.x, 0) / dartboardChanges.length;
-        const avgY = dartboardChanges.reduce((sum, p) => sum + p.y, 0) / dartboardChanges.length;
-
-        // Calculate score based on position
-        const result = this.calculateScore(avgX, avgY);
-        
-        // Call the callback if set
-        if (this.detectionCallback && result.score > 0) {
-          console.log(`Auto-detected dart at (${avgX.toFixed(0)}, ${avgY.toFixed(0)}): ${result.multiplier > 1 ? (result.multiplier === 2 ? 'D' : 'T') : ''}${result.score}`);
-          this.detectionCallback(result.score, result.multiplier);
-        }
-      }
-    }
-
-    // Store current frame for next comparison
-    this.previousFrame = currentFrame;
+  clearDetectionCallback(): void {
+    this.detectionCallback = null;
   }
 
-  // Detect changes between two frames
-  private detectFrameChanges(prevFrame: ImageData, currentFrame: ImageData): Array<{x: number, y: number}> {
-    const changes: Array<{x: number, y: number}> = [];
-    const threshold = 30; // Sensitivity threshold
-    const width = prevFrame.width;
-
-    for (let i = 0; i < prevFrame.data.length; i += 4) {
-      const rDiff = Math.abs(prevFrame.data[i] - currentFrame.data[i]);
-      const gDiff = Math.abs(prevFrame.data[i + 1] - currentFrame.data[i + 1]);
-      const bDiff = Math.abs(prevFrame.data[i + 2] - currentFrame.data[i + 2]);
-      
-      const totalDiff = rDiff + gDiff + bDiff;
-      
-      if (totalDiff > threshold) {
-        const pixelIndex = i / 4;
-        const x = pixelIndex % width;
-        const y = Math.floor(pixelIndex / width);
-        changes.push({ x, y });
-      }
-    }
-
-    return changes;
+  calibrateDartboard(_canvas: HTMLCanvasElement, centerX: number, centerY: number, radius: number, radiusY?: number, rotation: number = 0): void {
+    this.dartboardCenter = { x: centerX, y: centerY };
+    this.dartboardRadiusX = radius;
+    this.dartboardRadiusY = radiusY || radius;
+    this.dartboardRotation = rotation;
+    console.log(`Dartboard calibrated: center=(${centerX}, ${centerY}), radiusX=${radius}, radiusY=${this.dartboardRadiusY}, rotation=${(rotation * 180 / Math.PI).toFixed(1)}°`);
   }
 
-  // Reset frame comparison
-  resetFrameComparison(): void {
-    this.previousFrame = null;
+  // Transform point from ellipse space to circle space for angle calculation
+  private transformPoint(x: number, y: number): { x: number; y: number } {
+    if (!this.dartboardCenter) return { x, y };
+
+    const { x: centerX, y: centerY } = this.dartboardCenter;
+    
+    // Translate to origin
+    let dx = x - centerX;
+    let dy = y - centerY;
+    
+    // Rotate back by -rotation angle
+    const cos = Math.cos(-this.dartboardRotation);
+    const sin = Math.sin(-this.dartboardRotation);
+    const rotX = dx * cos - dy * sin;
+    const rotY = dx * sin + dy * cos;
+    
+    // Scale Y to make ellipse circular
+    const scaleY = this.dartboardRadiusY > 0 ? this.dartboardRadiusX / this.dartboardRadiusY : 1;
+    const circularY = rotY * scaleY;
+    
+    return { x: rotX, y: circularY };
+  }
+
+  calculateScore(x: number, y: number): { score: number; multiplier: number } {
+    if (!this.dartboardCenter) {
+      return { score: 0, multiplier: 1 };
+    }
+
+    // Transform the point to circular space
+    const transformed = this.transformPoint(x, y);
+    const distance = Math.sqrt(transformed.x ** 2 + transformed.y ** 2);
+    const angle = Math.atan2(transformed.y, transformed.x);
+    
+    // Normalize distance relative to radiusX
+    const normalizedDist = distance / this.dartboardRadiusX;
+
+    // Check bulls-eye (inner bull - 50 points)
+    if (normalizedDist < 0.04) {
+      return { score: 50, multiplier: 1 };
+    }
+
+    // Check bull (outer bull - 25 points)
+    if (normalizedDist < 0.07) {
+      return { score: 25, multiplier: 1 };
+    }
+
+    // Outside dartboard
+    if (normalizedDist > 1.0) {
+      return { score: 0, multiplier: 1 };
+    }
+
+    // Determine segment (1-20)
+    const dartboardSegments = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+    const segmentAngle = (angle + Math.PI + Math.PI / 20) % (Math.PI * 2);
+    const segmentIndex = Math.floor(segmentAngle / (Math.PI * 2 / 20));
+    const score = dartboardSegments[segmentIndex];
+
+    // Determine multiplier based on distance
+    // Triple ring: 0.58 - 0.65
+    if (normalizedDist >= 0.58 && normalizedDist <= 0.65) {
+      return { score, multiplier: 3 };
+    }
+
+    // Double ring: 0.95 - 1.0
+    if (normalizedDist >= 0.95 && normalizedDist <= 1.0) {
+      return { score, multiplier: 2 };
+    }
+
+    // Single
+    return { score, multiplier: 1 };
   }
 
   async detectDarts(canvas: HTMLCanvasElement): Promise<Detection[]> {
-    if (!this.model || !this.isInitialized) {
-      console.warn('Model not initialized');
-      return [];
+    if (!this.model) {
+      throw new Error('Model not initialized');
     }
 
     try {
       const predictions = await this.model.detect(canvas);
-      
-      // Filter for objects that could be darts or the dartboard
-      const detections: Detection[] = predictions
-        .filter(pred => 
-          pred.class === 'sports ball' || 
-          pred.class === 'frisbee' ||
-          pred.class === 'knife' ||
-          pred.score > 0.3
-        )
-        .map(pred => ({
-          bbox: pred.bbox,
-          class: pred.class,
-          score: pred.score
-        }));
-
-      return detections;
+      return predictions.map(pred => ({
+        class: pred.class,
+        score: pred.score,
+        bbox: pred.bbox
+      }));
     } catch (error) {
       console.error('Detection error:', error);
       return [];
     }
   }
 
-  // Auto-detect dartboard in the camera feed
-  autoDetectDartboard(canvas: HTMLCanvasElement): { centerX: number; centerY: number; radius: number } | null {
+  // Detect dart impact by comparing frames
+  detectDartImpact(canvas: HTMLCanvasElement): { x: number; y: number } | null {
+    if (!this.dartboardCenter) return null;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    if (!this.previousFrame) {
+      this.previousFrame = currentFrame;
+      return null;
+    }
+
+    // Calculate difference
+    let maxDiff = 0;
+    let maxDiffX = 0;
+    let maxDiffY = 0;
+    
+    const { x: centerX, y: centerY } = this.dartboardCenter;
+    const searchRadius = Math.max(this.dartboardRadiusX, this.dartboardRadiusY) * 1.2;
+
+    for (let y = Math.max(0, centerY - searchRadius); y < Math.min(canvas.height, centerY + searchRadius); y += 2) {
+      for (let x = Math.max(0, centerX - searchRadius); x < Math.min(canvas.width, centerX + searchRadius); x += 2) {
+        const idx = (y * canvas.width + x) * 4;
+        
+        const rDiff = Math.abs(currentFrame.data[idx] - this.previousFrame.data[idx]);
+        const gDiff = Math.abs(currentFrame.data[idx + 1] - this.previousFrame.data[idx + 1]);
+        const bDiff = Math.abs(currentFrame.data[idx + 2] - this.previousFrame.data[idx + 2]);
+        const totalDiff = rDiff + gDiff + bDiff;
+
+        if (totalDiff > maxDiff) {
+          maxDiff = totalDiff;
+          maxDiffX = x;
+          maxDiffY = y;
+        }
+      }
+    }
+
+    this.previousFrame = currentFrame;
+
+    if (maxDiff > 30) {
+      return { x: maxDiffX, y: maxDiffY };
+    }
+
+    return null;
+  }
+
+  resetFrameComparison(): void {
+    this.previousFrame = null;
+  }
+
+  // Auto-detect dartboard with ellipse detection for angled boards
+  autoDetectDartboard(canvas: HTMLCanvasElement): { centerX: number; centerY: number; radiusX: number; radiusY: number; rotation: number } | null {
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    // Look for circular regions with high contrast (dartboard has black/white/red/green)
-    const width = canvas.width;
-    const height = canvas.height;
+    const { data, width, height } = imageData;
     
-    // Create a simplified color map looking for dartboard colors
-    const colorScore: number[] = new Array(width * height).fill(0);
+    console.log('Auto-detecting dartboard with ellipse detection for angled boards...');
+    
+    // Create color score map for dartboard colors (black, white, red, green)
+    const colorScore: number[] = new Array(data.length / 4).fill(0);
     
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       
-      // Look for dartboard colors: dark (black), light (white/cream), red, green
       const isDark = r < 80 && g < 80 && b < 80;
       const isLight = r > 200 && g > 200 && b > 200;
       const isRed = r > 150 && g < 100 && b < 100;
       const isGreen = r < 100 && g > 120 && b < 100;
       
+      const pixelIndex = i / 4;
       if (isDark || isLight || isRed || isGreen) {
-        colorScore[i / 4] = 1;
+        colorScore[pixelIndex] = 1;
       }
     }
-
-    // Find regions with high density of dartboard colors
-    let bestCenterX = width / 2;
-    let bestCenterY = height / 2;
-    let bestScore = 0;
     
-    // Sample potential center points
-    const sampleStep = 20;
-    for (let cy = height * 0.2; cy < height * 0.8; cy += sampleStep) {
-      for (let cx = width * 0.2; cx < width * 0.8; cx += sampleStep) {
-        let score = 0;
-        const testRadius = Math.min(width, height) * 0.25;
+    // Try multiple ellipse parameters
+    let bestScore = 0;
+    let bestParams = { cx: Math.round(width / 2), cy: Math.round(height / 2), rx: Math.round(width * 0.25), ry: Math.round(height * 0.25), rotation: 0 };
+    
+    // Search for center (coarser grid for performance)
+    const sampleStep = 30;
+    for (let cy = Math.round(height * 0.2); cy < height * 0.8; cy += sampleStep) {
+      for (let cx = Math.round(width * 0.2); cx < width * 0.8; cx += sampleStep) {
         
-        // Count dartboard-colored pixels in a circle around this point
-        for (let angle = 0; angle < 360; angle += 10) {
-          const rad = (angle * Math.PI) / 180;
-          const x = Math.round(cx + testRadius * Math.cos(rad));
-          const y = Math.round(cy + testRadius * Math.sin(rad));
-          
-          if (x >= 0 && x < width && y >= 0 && y < height) {
-            const idx = y * width + x;
-            score += colorScore[idx];
+        // Try different aspect ratios (for angled views)
+        for (let aspectRatio = 0.5; aspectRatio <= 1.0; aspectRatio += 0.15) {
+          // Try different rotations
+          for (let rotationAngle = 0; rotationAngle < Math.PI; rotationAngle += Math.PI / 8) {
+            
+            // Test with different radius sizes
+            for (let testRadius = Math.round(Math.min(width, height) * 0.15); testRadius <= Math.min(width, height) * 0.4; testRadius += 10) {
+              const rx = testRadius;
+              const ry = Math.round(testRadius * aspectRatio);
+              
+              let score = 0;
+              const testPoints = 40;
+              
+              // Sample points around the ellipse perimeter
+              for (let i = 0; i < testPoints; i++) {
+                const angle = (i / testPoints) * Math.PI * 2;
+                
+                // Ellipse equation with rotation:
+                // x = cx + rx*cos(t)*cos(r) - ry*sin(t)*sin(r)
+                // y = cy + rx*cos(t)*sin(r) + ry*sin(t)*cos(r)
+                const cosT = Math.cos(angle);
+                const sinT = Math.sin(angle);
+                const cosR = Math.cos(rotationAngle);
+                const sinR = Math.sin(rotationAngle);
+                
+                const x = Math.round(cx + rx * cosT * cosR - ry * sinT * sinR);
+                const y = Math.round(cy + rx * cosT * sinR + ry * sinT * cosR);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                  const pixelIndex = y * width + x;
+                  score += colorScore[pixelIndex];
+                }
+              }
+              
+              // Also check inner ring
+              const innerRx = rx * 0.6;
+              const innerRy = ry * 0.6;
+              for (let i = 0; i < testPoints; i++) {
+                const angle = (i / testPoints) * Math.PI * 2;
+                const cosT = Math.cos(angle);
+                const sinT = Math.sin(angle);
+                const cosR = Math.cos(rotationAngle);
+                const sinR = Math.sin(rotationAngle);
+                
+                const x = Math.round(cx + innerRx * cosT * cosR - innerRy * sinT * sinR);
+                const y = Math.round(cy + innerRx * cosT * sinR + innerRy * sinT * cosR);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                  const pixelIndex = y * width + x;
+                  score += colorScore[pixelIndex] * 0.5;
+                }
+              }
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestParams = { cx, cy, rx, ry, rotation: rotationAngle };
+              }
+            }
           }
-        }
-        
-        if (score > bestScore) {
-          bestScore = score;
-          bestCenterX = cx;
-          bestCenterY = cy;
         }
       }
     }
-
-    // Refine radius by testing different sizes
-    let bestRadius = 0;
-    let maxRadiusScore = 0;
-    const minRadius = Math.min(width, height) * 0.15;
-    const maxRadius = Math.min(width, height) * 0.45;
-
-    for (let r = minRadius; r <= maxRadius; r += 3) {
-      let score = 0;
-      const samples = 36;
-
-      for (let angle = 0; angle < 360; angle += 360 / samples) {
-        const rad = (angle * Math.PI) / 180;
-        const x = Math.round(bestCenterX + r * Math.cos(rad));
-        const y = Math.round(bestCenterY + r * Math.sin(rad));
-
-        if (x >= 0 && x < width && y >= 0 && y < height) {
-          const idx = y * width + x;
-          score += colorScore[idx];
-          
-          // Also check inner and outer rings for better detection
-          const innerR = r * 0.8;
-          const xi = Math.round(bestCenterX + innerR * Math.cos(rad));
-          const yi = Math.round(bestCenterY + innerR * Math.sin(rad));
-          if (xi >= 0 && xi < width && yi >= 0 && yi < height) {
-            score += colorScore[yi * width + xi];
-          }
-        }
-      }
-
-      if (score > maxRadiusScore) {
-        maxRadiusScore = score;
-        bestRadius = r;
-      }
-    }
-
-    // Only return if we found a reasonable detection
-    if (bestScore > 5 && bestRadius > minRadius) {
-      console.log(`Auto-detected dartboard: center(${Math.round(bestCenterX)}, ${Math.round(bestCenterY)}), radius: ${Math.round(bestRadius)}, score: ${bestScore}`);
+    
+    const rotationDegrees = (bestParams.rotation * 180 / Math.PI).toFixed(1);
+    console.log(`Best ellipse found: center=(${bestParams.cx}, ${bestParams.cy}), rx=${bestParams.rx}, ry=${bestParams.ry}, rotation=${rotationDegrees}°, score=${bestScore}`);
+    
+    if (bestScore < 5) {
+      console.warn('Weak detection, using frame center as fallback');
       return {
-        centerX: Math.round(bestCenterX),
-        centerY: Math.round(bestCenterY),
-        radius: Math.round(bestRadius)
+        centerX: Math.round(width / 2),
+        centerY: Math.round(height / 2),
+        radiusX: Math.round(width * 0.25),
+        radiusY: Math.round(height * 0.25),
+        rotation: 0
       };
     }
-
-    // Fallback: use center of frame with estimated radius
-    console.log('Auto-detection fallback - using center of frame');
+    
     return {
-      centerX: Math.round(width / 2),
-      centerY: Math.round(height / 2),
-      radius: Math.round(Math.min(width, height) / 3)
+      centerX: bestParams.cx,
+      centerY: bestParams.cy,
+      radiusX: bestParams.rx,
+      radiusY: bestParams.ry,
+      rotation: bestParams.rotation
     };
   }
 
-  // Calibrate dartboard position and size
-  calibrateDartboard(_canvas: HTMLCanvasElement, centerX: number, centerY: number, radius: number): void {
-    this.dartboardCenter = { x: centerX, y: centerY };
-    this.dartboardRadius = radius;
-  }
+  drawDartboard(canvas: HTMLCanvasElement): void {
+    if (!this.dartboardCenter) return;
 
-  // Calculate dart score based on position relative to dartboard
-  calculateScore(dartX: number, dartY: number): { score: number; multiplier: number } {
-    if (!this.dartboardCenter || !this.dartboardRadius) {
-      return { score: 0, multiplier: 1 };
-    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    // Calculate distance from center
-    const dx = dartX - this.dartboardCenter.x;
-    const dy = dartY - this.dartboardCenter.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const normalizedDistance = distance / this.dartboardRadius;
+    const { x: centerX, y: centerY } = this.dartboardCenter;
+    const radiusX = this.dartboardRadiusX;
+    const radiusY = this.dartboardRadiusY;
+    const rotation = this.dartboardRotation;
 
-    // Calculate angle (0-360 degrees)
-    let angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    if (angle < 0) angle += 360;
-
-    // Adjust angle so 0 degrees is at top (12 o'clock position)
-    angle = (angle + 90) % 360;
-
-    // Determine which segment (1-20) based on angle
-    // Standard dartboard: 20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5
-    const segments = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-    const segmentIndex = Math.floor(angle / 18); // 360 / 20 = 18 degrees per segment
-    const segmentScore = segments[segmentIndex % 20];
-
-    // Determine multiplier based on distance from center
-    if (normalizedDistance <= 0.06) {
-      // Double bull (inner bull)
-      return { score: 50, multiplier: 1 };
-    } else if (normalizedDistance <= 0.12) {
-      // Single bull (outer bull)
-      return { score: 25, multiplier: 1 };
-    } else if (normalizedDistance > 0.95 && normalizedDistance <= 1.05) {
-      // Double ring (outer ring)
-      return { score: segmentScore, multiplier: 2 };
-    } else if (normalizedDistance > 0.55 && normalizedDistance <= 0.65) {
-      // Triple ring
-      return { score: segmentScore, multiplier: 3 };
-    } else if (normalizedDistance <= 0.95) {
-      // Single area
-      return { score: segmentScore, multiplier: 1 };
-    } else {
-      // Outside dartboard
-      return { score: 0, multiplier: 1 };
-    }
-  }
-
-  // Draw dartboard overlay on canvas
-  drawDartboard(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number): void {
-    // Save dartboard position for score calculation
-    this.dartboardCenter = { x: centerX, y: centerY };
-    this.dartboardRadius = radius;
-
-    // Draw dartboard circles
-    ctx.strokeStyle = 'rgba(255, 255, 0, 0.7)';
+    ctx.save();
+    
+    // Move to center and rotate
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation);
+    
+    // Draw ellipse rings
+    ctx.strokeStyle = '#00ff88';
     ctx.lineWidth = 2;
-
+    
     // Outer double ring
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
     ctx.stroke();
-
+    
     // Triple ring
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius * 0.6, 0, 2 * Math.PI);
+    ctx.ellipse(0, 0, radiusX * 0.65, radiusY * 0.65, 0, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Outer bull
+    
+    // Double ring  
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius * 0.12, 0, 2 * Math.PI);
+    ctx.ellipse(0, 0, radiusX * 0.58, radiusY * 0.58, 0, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Inner bull
+    
+    // Single ring
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius * 0.06, 0, 2 * Math.PI);
+    ctx.ellipse(0, 0, radiusX * 0.42, radiusY * 0.42, 0, 0, Math.PI * 2);
     ctx.stroke();
-
+    
+    // Bulls eye rings
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radiusX * 0.07, radiusY * 0.07, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radiusX * 0.04, radiusY * 0.04, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    
     // Draw segment lines
-    for (let i = 0; i < 20; i++) {
-      const angle = (i * 18 - 90) * (Math.PI / 180);
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
-      
+    const segments = 20;
+    for (let i = 0; i < segments; i++) {
+      const angle = (i * Math.PI * 2) / segments;
       ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.lineTo(x, y);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(angle) * radiusX, Math.sin(angle) * radiusY);
       ctx.stroke();
     }
+    
+    // Center crosshair
+    ctx.strokeStyle = '#ff0088';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(10, 0);
+    ctx.moveTo(0, -10);
+    ctx.lineTo(0, 10);
+    ctx.stroke();
+    
+    ctx.restore();
   }
 
-  // Draw detection boxes
-  drawDetections(ctx: CanvasRenderingContext2D, detections: Detection[]): void {
-    detections.forEach(detection => {
-      const [x, y, width, height] = detection.bbox;
-      
-      ctx.strokeStyle = '#00ff00';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, width, height);
-      
-      ctx.fillStyle = '#00ff00';
-      ctx.font = '16px Arial';
-      ctx.fillText(
-        `${detection.class} (${(detection.score * 100).toFixed(0)}%)`,
-        x,
-        y > 10 ? y - 5 : 10
-      );
-    });
+  processFrame(canvas: HTMLCanvasElement, autoDetectEnabled: boolean): void {
+    if (!this.dartboardCenter) {
+      return;
+    }
+
+    // Draw dartboard overlay
+    this.drawDartboard(canvas);
+
+    // Auto-detect dart impacts if enabled
+    if (autoDetectEnabled && this.detectionCallback) {
+      const impact = this.detectDartImpact(canvas);
+      if (impact) {
+        const { score, multiplier } = this.calculateScore(impact.x, impact.y);
+        if (score > 0) {
+          console.log(`Dart detected at (${impact.x}, ${impact.y}): ${multiplier}x ${score}`);
+          this.detectionCallback(score, multiplier);
+        }
+      }
+    }
   }
 }
 

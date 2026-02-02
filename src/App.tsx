@@ -92,10 +92,18 @@ function App() {
     if (canvasRef.current) {
       const result = dartDetectionService.autoDetectDartboard(canvasRef.current);
       if (result) {
-        dartDetectionService.calibrateDartboard(canvasRef.current, result.centerX, result.centerY, result.radius);
+        dartDetectionService.calibrateDartboard(
+          canvasRef.current, 
+          result.centerX, 
+          result.centerY, 
+          result.radiusX,
+          result.radiusY,
+          result.rotation
+        );
         setIsCalibrated(true);
-        console.log(`Auto-calibrated dartboard at (${result.centerX}, ${result.centerY}) with radius ${result.radius}`);
-        alert(`Auto-calibration complete!\nCenter: (${Math.round(result.centerX)}, ${Math.round(result.centerY)})\nRadius: ${Math.round(result.radius)}`);
+        const angleDegrees = (result.rotation * 180 / Math.PI).toFixed(1);
+        console.log(`Auto-calibrated ellipse dartboard: center=(${result.centerX}, ${result.centerY}), radiusX=${result.radiusX}, radiusY=${result.radiusY}, rotation=${angleDegrees}°`);
+        alert(`Auto-calibration complete!\nCenter: (${Math.round(result.centerX)}, ${Math.round(result.centerY)})\nRadius X: ${Math.round(result.radiusX)}\nRadius Y: ${Math.round(result.radiusY)}\nAngle: ${angleDegrees}°`);
       } else {
         alert('Could not detect dartboard. Please use manual calibration.');
       }
@@ -104,27 +112,10 @@ function App() {
 
   const handleFrame = useCallback((canvas: HTMLCanvasElement) => {
     canvasRef.current = canvas;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
-    // Auto-detect dart impacts if enabled
-    if (autoDetectEnabled && isCalibrated && gameState.isActive) {
-      dartDetectionService.detectDartImpact(canvas);
-    }
-
-    // Detect darts in the frame
-    dartDetectionService.detectDarts(canvas).then(detections => {
-      if (detections.length > 0) {
-        dartDetectionService.drawDetections(ctx, detections);
-      }
-    });
-
-    // Draw dartboard overlay if calibrated
+    // Process frame with auto-detection if enabled
     if (isCalibrated) {
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const radius = Math.min(canvas.width, canvas.height) / 4;
-      dartDetectionService.drawDartboard(ctx, centerX, centerY, radius);
+      dartDetectionService.processFrame(canvas, autoDetectEnabled && gameState.isActive);
     }
   }, [isCalibrated, autoDetectEnabled, gameState.isActive]);
 
