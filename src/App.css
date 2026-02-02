@@ -248,10 +248,19 @@
   font-weight: bold;
   cursor: pointer;
   transition: background 0.3s;
+  margin-bottom: 0.5rem;
 }
 
 .calibrate-btn:hover {
   background: #45a049;
+}
+
+.calibrate-btn.auto {
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+}
+
+.calibrate-btn.auto:hover {
+  background: linear-gradient(135deg, #1976D2, #1565C0);
 }
 
 .calibration-help {

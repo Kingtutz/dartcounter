@@ -22,6 +22,84 @@ export class DartDetectionService {
     }
   }
 
+  // Auto-detect dartboard in the camera feed
+  autoDetectDartboard(canvas: HTMLCanvasElement): { centerX: number; centerY: number; radius: number } | null {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // Convert to grayscale and find edges
+    const edges: number[] = [];
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      edges.push(gray);
+    }
+
+    // Find the brightest/most prominent circular region
+    // Look for the center of the image as a starting point
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    // Try different radii to find the best fit
+    let bestRadius = 0;
+    let maxScore = 0;
+
+    const minRadius = Math.min(canvas.width, canvas.height) * 0.15;
+    const maxRadius = Math.min(canvas.width, canvas.height) * 0.4;
+
+    for (let r = minRadius; r <= maxRadius; r += 5) {
+      let score = 0;
+      const samples = 36; // Sample 36 points around the circle
+
+      for (let angle = 0; angle < 360; angle += 360 / samples) {
+        const rad = (angle * Math.PI) / 180;
+        const x = Math.round(centerX + r * Math.cos(rad));
+        const y = Math.round(centerY + r * Math.sin(rad));
+
+        if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+          const idx = y * canvas.width + x;
+          
+          // Check for edge-like features (color transitions)
+          const neighbors = [
+            idx - 1,
+            idx + 1,
+            idx - canvas.width,
+            idx + canvas.width
+          ].filter(i => i >= 0 && i < edges.length);
+
+          const gradientSum = neighbors.reduce((sum, nidx) => {
+            return sum + Math.abs(edges[idx] - edges[nidx]);
+          }, 0);
+
+          score += gradientSum;
+        }
+      }
+
+      if (score > maxScore) {
+        maxScore = score;
+        bestRadius = r;
+      }
+    }
+
+    // If we found a reasonable circle
+    if (bestRadius > minRadius && maxScore > 1000) {
+      return {
+        centerX,
+        centerY,
+        radius: bestRadius
+      };
+    }
+
+    // Fallback: use default proportions
+    return {
+      centerX: canvas.width / 2,
+      centerY: canvas.height / 2,
+      radius: Math.min(canvas.width, canvas.height) / 3
+    };
+  }
+
   async detectDarts(canvas: HTMLCanvasElement): Promise<Detection[]> {
     if (!this.model || !this.isInitialized) {
       console.warn('Model not initialized');

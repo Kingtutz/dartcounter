@@ -45,6 +45,20 @@ function App() {
     }
   }, []);
 
+  const handleAutoCalibrate = useCallback(() => {
+    if (canvasRef.current) {
+      const result = dartDetectionService.autoDetectDartboard(canvasRef.current);
+      if (result) {
+        dartDetectionService.calibrateDartboard(canvasRef.current, result.centerX, result.centerY, result.radius);
+        setIsCalibrated(true);
+        console.log(`Auto-calibrated dartboard at (${result.centerX}, ${result.centerY}) with radius ${result.radius}`);
+        alert(`Auto-calibration complete!\nCenter: (${Math.round(result.centerX)}, ${Math.round(result.centerY)})\nRadius: ${Math.round(result.radius)}`);
+      } else {
+        alert('Could not detect dartboard. Please use manual calibration.');
+      }
+    }
+  }, []);
+
   const handleFrame = useCallback((canvas: HTMLCanvasElement) => {
     canvasRef.current = canvas;
     const ctx = canvas.getContext('2d');
@@ -149,6 +163,7 @@ function App() {
           
           <DartboardCalibration 
             onCalibrate={handleCalibrate}
+            onAutoCalibrate={handleAutoCalibrate}
             isCalibrated={isCalibrated}
           />
         </div>

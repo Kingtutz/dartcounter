@@ -2,10 +2,12 @@ import { useState } from 'react';
 
 interface DartboardCalibrationProps {
   onCalibrate: (centerX: number, centerY: number, radius: number) => void;
+  onAutoCalibrate: () => void;
   isCalibrated: boolean;
 }
 
 export const DartboardCalibration: React.FC<DartboardCalibrationProps> = ({ 
+  onAutoCalibrate,
   onCalibrate,
   isCalibrated 
 }) => {
@@ -60,6 +62,10 @@ export const DartboardCalibration: React.FC<DartboardCalibrationProps> = ({
 
       <button onClick={handleCalibrate} className="calibrate-btn">
         {isCalibrated ? 'Recalibrate' : 'Calibrate Dartboard'}
+      </button>
+
+      <button onClick={onAutoCalibrate} className="calibrate-btn auto">
+        🤖 Auto-Calibrate (AI Detection)
       </button>
 
       <div className="calibration-help">
